@@ -10,7 +10,7 @@ interface LoadingOverlayProps {
 export function LoadingOverlay({ visible, message }: LoadingOverlayProps) {
   if (!visible) return null;
   return (
-    <View style={StyleSheet.absoluteFillObject} className="items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.55)', zIndex: 999 }}>
+    <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.55)', zIndex: 999, alignItems: 'center', justifyContent: 'center' }]}>
       <View
         style={{
           backgroundColor: Colors.surfaceLight,
