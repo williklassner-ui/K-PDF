@@ -57,7 +57,6 @@
           "backgroundColor": "#00000000"
         }
       ],
-      "@shopify/react-native-skia"
     ],
     "experiments": {
       "typedRoutes": true

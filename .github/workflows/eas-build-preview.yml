@@ -31,6 +31,8 @@ jobs:
         run: npm run typecheck
 
       - name: Expo prebuild (generate android/ project)
+        env:
+          NODE_OPTIONS: "--no-experimental-require-module"
         run: npx expo prebuild --platform android --clean --no-install
 
       - name: Build APK
