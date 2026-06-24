@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Platform,
   StatusBar,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +17,7 @@ interface ViewerToolbarProps {
   totalPages: number;
   isVisible: boolean;
   isBookmarked: boolean;
+  isFullscreen: boolean;
   onSearch: () => void;
   onBookmarkPanel: () => void;
   onToggleBookmark: () => void;
@@ -29,6 +29,7 @@ interface ViewerToolbarProps {
   isDark: boolean;
   onMenuToggle: () => void;
   isMenuOpen: boolean;
+  onToggleFullscreen: () => void;
 }
 
 export function ViewerToolbar({
@@ -37,6 +38,7 @@ export function ViewerToolbar({
   totalPages,
   isVisible,
   isBookmarked,
+  isFullscreen,
   onSearch,
   onBookmarkPanel,
   onToggleBookmark,
@@ -48,6 +50,7 @@ export function ViewerToolbar({
   isDark,
   onMenuToggle,
   isMenuOpen,
+  onToggleFullscreen,
 }: ViewerToolbarProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -110,6 +113,14 @@ export function ViewerToolbar({
             hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
           >
             <Text style={styles.iconText}>☰</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={onToggleFullscreen}
+            style={styles.iconBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+          >
+            <Text style={styles.iconText}>{isFullscreen ? '⊡' : '⛶'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -187,7 +198,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   menu: {
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: Colors.cardLight,
     position: 'absolute',
     right: 12,
     top: 80,
@@ -196,10 +207,12 @@ const styles = StyleSheet.create({
     minWidth: 200,
     elevation: 8,
     shadowColor: '#000',
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.5,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     zIndex: 100,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.borderLight,
   },
   menuItem: {
     paddingHorizontal: 16,

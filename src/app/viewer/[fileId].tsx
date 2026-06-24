@@ -1,6 +1,8 @@
 import React, { useRef, useCallback, useEffect, useState } from 'react';
-import { View, StyleSheet, TouchableWithoutFeedback, Alert } from 'react-native';
+import { View, StyleSheet, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import * as NavigationBar from 'expo-navigation-bar';
 import * as Print from 'expo-print';
 import { useFileStore } from '@/store/fileStore';
 import { useReaderStore } from '@/store/readerStore';
@@ -24,6 +26,7 @@ export default function ViewerScreen() {
     currentPage,
     totalPages,
     isToolbarVisible,
+    isFullscreen,
     isSearchOpen,
     isBookmarkPanelOpen,
     searchResults,
@@ -31,6 +34,7 @@ export default function ViewerScreen() {
     setCurrentPage,
     setTotalPages,
     toggleToolbar,
+    toggleFullscreen,
     showToolbar,
     setSearchOpen,
     setBookmarkPanelOpen,
@@ -125,6 +129,15 @@ export default function ViewerScreen() {
     router.push(`/editor/${fileId}`);
   }
 
+  async function handleToggleFullscreen() {
+    if (isFullscreen) {
+      await NavigationBar.setVisibilityAsync('visible');
+    } else {
+      await NavigationBar.setVisibilityAsync('hidden');
+    }
+    toggleFullscreen();
+  }
+
   async function handleSaveCopy() {
     if (!file || !base64) return;
     try {
@@ -139,12 +152,14 @@ export default function ViewerScreen() {
 
   return (
     <View style={styles.container}>
+      <StatusBar hidden={isFullscreen} style="light" />
       <ViewerToolbar
         title={file?.name ?? ''}
         currentPage={currentPage}
         totalPages={totalPages}
         isVisible={isToolbarVisible}
         isBookmarked={isCurrentPageBookmarked}
+        isFullscreen={isFullscreen}
         onSearch={() => setSearchOpen(true)}
         onBookmarkPanel={() => {
           setBookmarkPanelOpen(!isBookmarkPanelOpen);
@@ -158,11 +173,11 @@ export default function ViewerScreen() {
         onToggleDark={() => {
           const next = !localDark;
           setLocalDark(next);
-          viewerRef.current?.setDark(next);
         }}
         isDark={localDark}
         onMenuToggle={() => setIsMenuOpen((v) => !v)}
         isMenuOpen={isMenuOpen}
+        onToggleFullscreen={handleToggleFullscreen}
       />
 
       {isSearchOpen && (
@@ -188,23 +203,21 @@ export default function ViewerScreen() {
         />
       )}
 
-      <TouchableWithoutFeedback onPress={() => {
-        toggleToolbar();
-        setIsMenuOpen(false);
-      }}>
-        <View style={styles.pdfContainer}>
-          <PDFViewer
-            ref={viewerRef}
-            base64={base64 ?? undefined}
-            onLoaded={handleLoaded}
-            onPageChanged={handlePageChanged}
-            onSearchResults={handleSearchResults}
-            onSearchIndex={(index) => setActiveSearchIndex(index)}
-            darkMode={localDark}
-            style={styles.pdf}
-          />
-        </View>
-      </TouchableWithoutFeedback>
+      <View style={styles.pdfContainer}>
+        <PDFViewer
+          ref={viewerRef}
+          base64={base64 ?? undefined}
+          onLoaded={handleLoaded}
+          onPageChanged={handlePageChanged}
+          onSearchResults={handleSearchResults}
+          onSearchIndex={(index) => setActiveSearchIndex(index)}
+          onTap={() => {
+            toggleToolbar();
+            setIsMenuOpen(false);
+          }}
+          style={styles.pdf}
+        />
+      </View>
 
       <BookmarkPanel
         visible={isBookmarkPanelOpen}
