@@ -1,31 +1,32 @@
 export const Colors = {
-  primary: '#1a237e',
-  primaryLight: '#534bae',
-  primaryDark: '#000051',
+  // Dark theme — black + orange
+  primary: '#111111',
+  primaryLight: '#1c1c1c',
+  primaryDark: '#000000',
   accent: '#ffa000',
   accentLight: '#ffd149',
   accentDark: '#c67100',
 
   // Backgrounds
-  bgLight: '#f5f5f5',
-  bgDark: '#121212',
-  surfaceLight: '#ffffff',
-  surfaceDark: '#1e1e1e',
-  cardLight: '#ffffff',
-  cardDark: '#2d2d2d',
+  bgLight: '#1a1a1a',
+  bgDark: '#0d0d0d',
+  surfaceLight: '#242424',
+  surfaceDark: '#1a1a1a',
+  cardLight: '#2a2a2a',
+  cardDark: '#1e1e1e',
 
   // Text
-  textPrimaryLight: '#212121',
+  textPrimaryLight: '#ffffff',
   textPrimaryDark: '#ffffff',
-  textSecondaryLight: '#757575',
-  textSecondaryDark: '#b0b0b0',
+  textSecondaryLight: '#aaaaaa',
+  textSecondaryDark: '#888888',
 
   // Borders
-  borderLight: '#e0e0e0',
-  borderDark: '#3d3d3d',
+  borderLight: '#333333',
+  borderDark: '#222222',
 
   // Toolbar
-  toolbarBg: '#1a237e',
+  toolbarBg: '#111111',
   toolbarText: '#ffffff',
   toolbarIcon: '#ffffff',
   toolbarIconDisabled: 'rgba(255,255,255,0.4)',
@@ -42,8 +43,8 @@ export const Colors = {
   highlightOrange: 'rgba(255, 152, 0, 0.5)',
 
   // PDF viewer
-  pdfBg: '#525659',
-  pageShadow: 'rgba(0,0,0,0.4)',
+  pdfBg: '#1a1a1a',
+  pageShadow: 'rgba(0,0,0,0.6)',
 
   // Status
   error: '#d32f2f',

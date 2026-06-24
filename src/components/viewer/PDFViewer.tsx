@@ -1,5 +1,5 @@
 import React, { useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
-import { View, StyleSheet, useColorScheme } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Colors } from '@/constants/colors';
 
@@ -7,24 +7,21 @@ const PDF_VIEWER_HTML = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=4,user-scalable=yes">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow-x:hidden;background:#525659}
-#toolbar{display:none}
+html,body{width:100%;height:100%;overflow-x:hidden;background:#1a1a1a;scroll-behavior:smooth}
 #viewer{display:flex;flex-direction:column;align-items:center;padding:8px 0;min-height:100vh}
-.page-wrapper{margin:6px 0;position:relative;box-shadow:0 2px 8px rgba(0,0,0,0.4)}
-canvas{display:block;max-width:100%}
-.page-num{position:absolute;bottom:4px;right:6px;background:rgba(0,0,0,0.5);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;pointer-events:none}
+.page-wrapper{margin:6px 0;position:relative;box-shadow:0 2px 12px rgba(0,0,0,0.6)}
+canvas{display:block}
+.page-num{position:absolute;bottom:4px;right:6px;background:rgba(0,0,0,0.55);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;pointer-events:none}
 #loading{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-family:sans-serif;font-size:16px;text-align:center}
-.dark-filter{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;background:rgba(0,0,0,0);mix-blend-mode:multiply;z-index:1000;display:none}
 </style>
 </head>
 <body>
 <div id="loading">Lade PDF...</div>
-<div class="dark-filter" id="darkFilter"></div>
 <div id="viewer"></div>
-<script type="module">
+<script>
 const cdnBase = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
 const script = document.createElement('script');
 script.src = cdnBase + 'pdf.min.js';
@@ -36,13 +33,19 @@ document.head.appendChild(script);
 
 let pdfDoc = null;
 let currentPage = 1;
-let isDark = false;
-let searchMatches = [];
 let renderTasks = {};
+let currentScale = 1.0;
+let pinchStartDist = 0;
+let pinchBaseScale = 1.0;
+let pinchLastScale = 1.0;
+let scrollTimer = null;
+let tapT = 0, tapMoved = false;
 
 function init() {
   window.addEventListener('message', handleMessage);
   document.addEventListener('message', handleMessage);
+  setupScrollTracking();
+  setupGestures();
   postToApp({type:'ready'});
 }
 
@@ -51,8 +54,7 @@ function handleMessage(e) {
   try { msg = JSON.parse(e.data); } catch { return; }
   if (msg.type === 'load') loadPDF(msg.base64);
   else if (msg.type === 'goTo') scrollToPage(msg.page);
-  else if (msg.type === 'zoom') setZoom(msg.scale);
-  else if (msg.type === 'dark') setDark(msg.enabled);
+  else if (msg.type === 'zoom') rerenderAllPages(msg.scale);
   else if (msg.type === 'search') performSearch(msg.query);
   else if (msg.type === 'clearSearch') clearSearch();
   else if (msg.type === 'nextSearch') navigateSearch(1);
@@ -66,6 +68,8 @@ function postToApp(data) {
 async function loadPDF(base64) {
   document.getElementById('loading').style.display = 'block';
   document.getElementById('viewer').innerHTML = '';
+  renderTasks = {};
+  currentScale = 1.0;
   try {
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
@@ -73,87 +77,109 @@ async function loadPDF(base64) {
     pdfDoc = await pdfjsLib.getDocument({data:bytes,cMapUrl:cdnBase+'cmaps/',cMapPacked:true}).promise;
     document.getElementById('loading').style.display = 'none';
     postToApp({type:'loaded', numPages: pdfDoc.numPages});
-    for (let i = 1; i <= pdfDoc.numPages; i++) await renderPage(i);
+    for (let i = 1; i <= pdfDoc.numPages; i++) await renderPage(i, currentScale);
   } catch(err) {
     document.getElementById('loading').textContent = 'Fehler: ' + err.message;
     postToApp({type:'error', message: err.message});
   }
 }
 
-async function renderPage(num) {
+async function renderPage(num, scale) {
   const page = await pdfDoc.getPage(num);
   const vw = window.innerWidth - 16;
-  const viewport = page.getViewport({scale: vw / page.getViewport({scale:1}).width});
+  const naturalW = page.getViewport({scale:1}).width;
+  const viewport = page.getViewport({scale: (vw / naturalW) * scale});
+
   const wrapper = document.createElement('div');
   wrapper.className = 'page-wrapper';
   wrapper.id = 'page-' + num;
   wrapper.dataset.page = num;
   const canvas = document.createElement('canvas');
-  canvas.height = viewport.height;
   canvas.width = viewport.width;
-  const numLabel = document.createElement('div');
-  numLabel.className = 'page-num';
-  numLabel.textContent = num;
+  canvas.height = viewport.height;
+  const label = document.createElement('div');
+  label.className = 'page-num';
+  label.textContent = num;
   wrapper.appendChild(canvas);
-  wrapper.appendChild(numLabel);
+  wrapper.appendChild(label);
   document.getElementById('viewer').appendChild(wrapper);
+
+  observer.observe(wrapper);
+
   const ctx = canvas.getContext('2d');
   const task = page.render({canvasContext:ctx, viewport});
   renderTasks[num] = task;
-  await task.promise;
+  try { await task.promise; } catch {}
   delete renderTasks[num];
+}
+
+async function rerenderPage(num, scale) {
+  const wrapper = document.getElementById('page-' + num);
+  if (!wrapper) return;
+  const canvas = wrapper.querySelector('canvas');
+  if (!canvas) return;
+
+  const page = await pdfDoc.getPage(num);
+  const vw = window.innerWidth - 16;
+  const naturalW = page.getViewport({scale:1}).width;
+  const viewport = page.getViewport({scale: (vw / naturalW) * scale});
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+
+  if (renderTasks[num]) { try { renderTasks[num].cancel(); } catch {} }
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const task = page.render({canvasContext:ctx, viewport});
+  renderTasks[num] = task;
+  try { await task.promise; } catch {}
+  delete renderTasks[num];
+}
+
+async function rerenderAllPages(scale) {
+  if (!pdfDoc) return;
+  const s = Math.max(0.5, Math.min(4, scale));
+  currentScale = s;
+  pinchBaseScale = s;
+  pinchLastScale = s;
+  const scrollY = window.scrollY;
+  // Cancel all in-flight renders
+  for (const k in renderTasks) { try { renderTasks[k].cancel(); } catch {} }
+  renderTasks = {};
+  for (let i = 1; i <= pdfDoc.numPages; i++) await rerenderPage(i, s);
+  window.scrollTo(0, scrollY);
 }
 
 function scrollToPage(num) {
   const el = document.getElementById('page-' + num);
-  if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
-  currentPage = num;
-}
-
-function setZoom(scale) {
-  document.body.style.zoom = scale;
-}
-
-function setDark(enabled) {
-  isDark = enabled;
-  document.getElementById('darkFilter').style.display = enabled ? 'block' : 'none';
-  document.body.style.background = enabled ? '#1a1a1a' : '#525659';
-  if (enabled) {
-    document.getElementById('darkFilter').style.background = 'rgba(0,0,0,0.45)';
+  if (!el) return;
+  el.scrollIntoView({behavior:'instant', block:'start'});
+  if (num !== currentPage) {
+    currentPage = num;
+    postToApp({type:'pageChanged', page: num});
   }
 }
 
-async function performSearch(query) {
-  clearSearch();
-  if (!pdfDoc || !query) return;
-  const results = [];
-  for (let i = 1; i <= pdfDoc.numPages; i++) {
-    const page = await pdfDoc.getPage(i);
-    const tc = await page.getTextContent();
-    const text = tc.items.map(it => it.str).join(' ');
-    if (text.toLowerCase().includes(query.toLowerCase())) {
-      results.push({page: i, text});
-    }
-  }
-  searchMatches = results;
-  postToApp({type:'searchResults', count: results.length, pages: results.map(r=>r.page)});
-  if (results.length > 0) scrollToPage(results[0].page);
+// Page tracking via scroll events (primary) + IntersectionObserver (backup)
+function setupScrollTracking() {
+  document.addEventListener('scroll', () => {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => {
+      const wrappers = document.querySelectorAll('.page-wrapper');
+      for (const w of wrappers) {
+        const rect = w.getBoundingClientRect();
+        if (rect.top >= -(rect.height * 0.5) && rect.top < window.innerHeight * 0.5) {
+          const p = parseInt(w.dataset.page);
+          if (p !== currentPage) {
+            currentPage = p;
+            postToApp({type:'pageChanged', page: p});
+          }
+          break;
+        }
+      }
+    }, 80);
+  }, {passive:true});
 }
 
-let searchIdx = 0;
-function navigateSearch(dir) {
-  if (!searchMatches.length) return;
-  searchIdx = (searchIdx + dir + searchMatches.length) % searchMatches.length;
-  scrollToPage(searchMatches[searchIdx].page);
-  postToApp({type:'searchIndex', index: searchIdx});
-}
-
-function clearSearch() {
-  searchMatches = [];
-  searchIdx = 0;
-}
-
-// Track visible page for page number updates
 const observer = new IntersectionObserver((entries) => {
   entries.forEach(e => {
     if (e.isIntersecting && e.intersectionRatio > 0.4) {
@@ -166,16 +192,79 @@ const observer = new IntersectionObserver((entries) => {
   });
 }, {threshold:0.4});
 
-const origAppend = document.getElementById('viewer').appendChild.bind(document.getElementById('viewer'));
-const viewerEl = document.getElementById('viewer');
-const MO = new MutationObserver(muts => {
-  muts.forEach(m => {
-    m.addedNodes.forEach(n => {
-      if (n.nodeType === 1 && n.dataset && n.dataset.page) observer.observe(n);
-    });
-  });
-});
-MO.observe(viewerEl, {childList:true});
+// Tap + Pinch gesture handling
+function setupGestures() {
+  // Tap detection
+  document.addEventListener('touchstart', e => {
+    if (e.touches.length === 1) { tapT = Date.now(); tapMoved = false; }
+    if (e.touches.length === 2) {
+      tapT = 0; // cancel tap if pinch starts
+      pinchStartDist = Math.hypot(
+        e.touches[1].clientX - e.touches[0].clientX,
+        e.touches[1].clientY - e.touches[0].clientY
+      );
+      pinchBaseScale = currentScale;
+      pinchLastScale = currentScale;
+    }
+  }, {passive:true});
+
+  document.addEventListener('touchmove', e => {
+    if (e.touches.length === 1) { tapMoved = true; }
+    if (e.touches.length === 2 && pinchStartDist) {
+      const dist = Math.hypot(
+        e.touches[1].clientX - e.touches[0].clientX,
+        e.touches[1].clientY - e.touches[0].clientY
+      );
+      pinchLastScale = Math.max(0.5, Math.min(4, pinchBaseScale * dist / pinchStartDist));
+      const viewer = document.getElementById('viewer');
+      viewer.style.transform = 'scale(' + (pinchLastScale / currentScale) + ')';
+      viewer.style.transformOrigin = 'top center';
+    }
+  }, {passive:true});
+
+  document.addEventListener('touchend', e => {
+    // Single tap
+    if (e.changedTouches.length === 1 && !tapMoved && tapT > 0 && (Date.now() - tapT) < 250) {
+      postToApp({type:'tap'});
+    }
+    // Pinch end — re-render at final scale
+    if (pinchStartDist && e.touches.length < 2) {
+      const viewer = document.getElementById('viewer');
+      viewer.style.transform = '';
+      viewer.style.transformOrigin = '';
+      pinchStartDist = 0;
+      rerenderAllPages(pinchLastScale);
+    }
+  }, {passive:true});
+}
+
+// Search
+let searchMatches = [];
+let searchIdx = 0;
+
+async function performSearch(query) {
+  clearSearch();
+  if (!pdfDoc || !query) return;
+  const results = [];
+  for (let i = 1; i <= pdfDoc.numPages; i++) {
+    const page = await pdfDoc.getPage(i);
+    const tc = await page.getTextContent();
+    const text = tc.items.map(it => it.str).join(' ');
+    if (text.toLowerCase().includes(query.toLowerCase())) results.push({page:i, text});
+  }
+  searchMatches = results;
+  postToApp({type:'searchResults', count:results.length, pages:results.map(r=>r.page)});
+  if (results.length > 0) scrollToPage(results[0].page);
+}
+
+function navigateSearch(dir) {
+  if (!searchMatches.length) return;
+  searchIdx = (searchIdx + dir + searchMatches.length) % searchMatches.length;
+  scrollToPage(searchMatches[searchIdx].page);
+  postToApp({type:'searchIndex', index:searchIdx});
+}
+
+function clearSearch() { searchMatches = []; searchIdx = 0; }
 </script>
 </body>
 </html>`;
@@ -183,7 +272,6 @@ MO.observe(viewerEl, {childList:true});
 export interface PDFViewerRef {
   goToPage: (page: number) => void;
   setZoom: (scale: number) => void;
-  setDark: (enabled: boolean) => void;
   search: (query: string) => void;
   clearSearch: () => void;
   nextSearch: () => void;
@@ -193,13 +281,12 @@ export interface PDFViewerRef {
 
 interface PDFViewerProps {
   base64?: string;
-  filePath?: string;
   onLoaded?: (numPages: number) => void;
   onPageChanged?: (page: number) => void;
   onError?: (message: string) => void;
   onSearchResults?: (count: number, pages: number[]) => void;
   onSearchIndex?: (index: number) => void;
-  darkMode?: boolean;
+  onTap?: () => void;
   style?: object;
 }
 
@@ -212,7 +299,7 @@ const PDFViewer = forwardRef<PDFViewerRef, PDFViewerProps>(
       onError,
       onSearchResults,
       onSearchIndex,
-      darkMode = false,
+      onTap,
       style,
     },
     ref
@@ -228,14 +315,11 @@ const PDFViewer = forwardRef<PDFViewerRef, PDFViewerProps>(
     useImperativeHandle(ref, () => ({
       goToPage: (page) => send({ type: 'goTo', page }),
       setZoom: (scale) => send({ type: 'zoom', scale }),
-      setDark: (enabled) => send({ type: 'dark', enabled }),
       search: (query) => send({ type: 'search', query }),
       clearSearch: () => send({ type: 'clearSearch' }),
       nextSearch: () => send({ type: 'nextSearch' }),
       prevSearch: () => send({ type: 'prevSearch' }),
-      reload: () => {
-        if (base64) send({ type: 'load', base64 });
-      },
+      reload: () => { if (base64) send({ type: 'load', base64 }); },
     }));
 
     const handleMessage = useCallback(
@@ -244,7 +328,6 @@ const PDFViewer = forwardRef<PDFViewerRef, PDFViewerProps>(
           const msg = JSON.parse(event.nativeEvent.data);
           if (msg.type === 'ready' && base64) {
             send({ type: 'load', base64 });
-            if (darkMode) send({ type: 'dark', enabled: true });
           } else if (msg.type === 'loaded') {
             onLoaded?.(msg.numPages);
           } else if (msg.type === 'pageChanged') {
@@ -255,12 +338,14 @@ const PDFViewer = forwardRef<PDFViewerRef, PDFViewerProps>(
             onSearchResults?.(msg.count, msg.pages);
           } else if (msg.type === 'searchIndex') {
             onSearchIndex?.(msg.index);
+          } else if (msg.type === 'tap') {
+            onTap?.();
           }
         } catch {
           /* ignore */
         }
       },
-      [base64, darkMode, send, onLoaded, onPageChanged, onError, onSearchResults, onSearchIndex]
+      [base64, send, onLoaded, onPageChanged, onError, onSearchResults, onSearchIndex, onTap]
     );
 
     return (
@@ -279,7 +364,7 @@ const PDFViewer = forwardRef<PDFViewerRef, PDFViewerProps>(
           showsVerticalScrollIndicator={false}
           bounces={false}
           overScrollMode="never"
-          renderLoading={() => <View />}
+          scalesPageToFit={false}
           startInLoadingState={false}
         />
       </View>

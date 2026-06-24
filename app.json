@@ -11,13 +11,13 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1a237e"
+      "backgroundColor": "#111111"
     },
     "platforms": ["android"],
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1a237e"
+        "backgroundColor": "#111111"
       },
       "package": "com.williklassner.kpdf",
       "versionCode": 1,
@@ -37,7 +37,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#1a237e",
+          "backgroundColor": "#111111",
           "image": "./assets/splash.png",
           "imageWidth": 200
         }
@@ -51,10 +51,10 @@
       [
         "expo-navigation-bar",
         {
-          "position": "absolute",
-          "visibility": "hidden",
+          "position": "relative",
+          "visibility": "visible",
           "behavior": "inset-touch",
-          "backgroundColor": "#00000000"
+          "backgroundColor": "#111111"
         }
       ],
     ],
