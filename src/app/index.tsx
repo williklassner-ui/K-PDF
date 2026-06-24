@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   StyleSheet,
   SafeAreaView,
   Alert,
+  BackHandler,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/colors';
@@ -19,6 +20,21 @@ import { deleteFile } from '@/services/FileService';
 export default function HomeScreen() {
   const router = useRouter();
   const { files, removeFile, updateLastOpened } = useFileStore();
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      Alert.alert(
+        'App beenden?',
+        'Wirklich beenden?',
+        [
+          { text: 'Abbrechen', style: 'cancel' },
+          { text: 'Beenden', style: 'destructive', onPress: () => BackHandler.exitApp() },
+        ]
+      );
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
   const { pickPDF } = useDocumentPicker();
   const [sortField, setSortField] = useState<SortField>('lastOpened');
   const [sortDir, setSortDir] = useState<SortDir>('desc');

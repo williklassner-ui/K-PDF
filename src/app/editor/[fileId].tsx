@@ -3,6 +3,7 @@ import {
   View,
   StyleSheet,
   Alert,
+  BackHandler,
   TouchableOpacity,
   Text,
   ScrollView,
@@ -63,6 +64,14 @@ export default function EditorScreen() {
     reset();
     return () => reset();
   }, [fileId]);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [isDirty]);
 
   useEffect(() => {
     if (activeTool === 'form' && file && formFields.length === 0) {
