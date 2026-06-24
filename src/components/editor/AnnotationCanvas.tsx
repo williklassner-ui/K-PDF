@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, GestureResponderEvent } from 'react-native';
-import { Canvas, Rect } from '@shopify/react-native-skia';
 import { useEditorStore } from '@/store/editorStore';
 import { normalizedToScreen } from '@/utils/pdfCoordinates';
 import { parseRgbaComponents } from '@/utils/colorUtils';
@@ -33,31 +32,24 @@ function AnnotationRect({
   const screen = normalizedToScreen(annotation, containerWidth, containerHeight);
   const { r, g, b, a } = parseRgbaComponents(annotation.color ?? 'rgba(255,235,59,0.5)');
 
-  if (annotation.type === 'highlight') {
-    return (
-      <Rect
-        x={screen.x}
-        y={screen.y}
-        width={screen.width}
-        height={screen.height}
-        color={`rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${annotation.opacity ?? a})`}
-      />
-    );
-  }
+  const color =
+    annotation.type === 'redact'
+      ? 'black'
+      : `rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${annotation.opacity ?? a})`;
 
-  if (annotation.type === 'redact') {
-    return (
-      <Rect
-        x={screen.x}
-        y={screen.y}
-        width={screen.width}
-        height={screen.height}
-        color="black"
-      />
-    );
-  }
-
-  return null;
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        left: screen.x,
+        top: screen.y,
+        width: screen.width,
+        height: screen.height,
+        backgroundColor: color,
+      }}
+      pointerEvents="none"
+    />
+  );
 }
 
 export function AnnotationCanvas({
@@ -147,33 +139,35 @@ export function AnnotationCanvas({
       onResponderMove={handleTouchMove}
       onResponderRelease={handleTouchEnd}
     >
-      <Canvas style={StyleSheet.absoluteFillObject} pointerEvents="none">
-        {pageAnnotations.map((annotation) => (
-          <AnnotationRect
-            key={annotation.id}
-            annotation={annotation}
-            containerWidth={containerWidth}
-            containerHeight={containerHeight}
-          />
-        ))}
+      {pageAnnotations.map((annotation) => (
+        <AnnotationRect
+          key={annotation.id}
+          annotation={annotation}
+          containerWidth={containerWidth}
+          containerHeight={containerHeight}
+        />
+      ))}
 
-        {drag?.active && isInteractive && (() => {
-          const x = Math.min(drag.startX, drag.currentX);
-          const y = Math.min(drag.startY, drag.currentY);
-          const w = Math.abs(drag.currentX - drag.startX);
-          const h = Math.abs(drag.currentY - drag.startY);
-          const { r, g, b, a } = parseRgbaComponents(dragPreviewColor);
-          return (
-            <Rect
-              x={x}
-              y={y}
-              width={w}
-              height={h}
-              color={`rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${a})`}
-            />
-          );
-        })()}
-      </Canvas>
+      {drag?.active && isInteractive && (() => {
+        const x = Math.min(drag.startX, drag.currentX);
+        const y = Math.min(drag.startY, drag.currentY);
+        const w = Math.abs(drag.currentX - drag.startX);
+        const h = Math.abs(drag.currentY - drag.startY);
+        const { r, g, b, a } = parseRgbaComponents(dragPreviewColor);
+        return (
+          <View
+            style={{
+              position: 'absolute',
+              left: x,
+              top: y,
+              width: w,
+              height: h,
+              backgroundColor: `rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${a})`,
+            }}
+            pointerEvents="none"
+          />
+        );
+      })()}
     </View>
   );
 }
