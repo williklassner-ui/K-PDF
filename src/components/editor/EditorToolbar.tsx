@@ -6,7 +6,6 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/colors';
 import { t } from '@/constants/i18n';
 import type { Tool } from '@/store/editorStore';
@@ -35,20 +34,15 @@ export function EditorToolbar({
   onClose,
 }: EditorToolbarProps) {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
-
-  function handleClose() {
-    onClose();
-  }
 
   return (
     <View style={[styles.toolbar, { paddingTop: insets.top + 4 }]}>
       <TouchableOpacity
-        onPress={handleClose}
+        onPress={onClose}
         style={styles.iconBtn}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Text style={styles.iconText}>✕</Text>
+        <Text style={styles.iconText}>←</Text>
       </TouchableOpacity>
 
       <Text style={styles.title} numberOfLines={1}>
@@ -62,7 +56,7 @@ export function EditorToolbar({
           disabled={!canUndo}
           hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
         >
-          <Text style={[styles.iconText, !canUndo && styles.iconDisabled]}>↩</Text>
+          <Text style={[styles.iconText, !canUndo && styles.iconDisabled]}>⟲</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -71,7 +65,7 @@ export function EditorToolbar({
           disabled={!canRedo}
           hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
         >
-          <Text style={[styles.iconText, !canRedo && styles.iconDisabled]}>↪</Text>
+          <Text style={[styles.iconText, !canRedo && styles.iconDisabled]}>⟳</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -105,7 +99,7 @@ const styles = StyleSheet.create({
     padding: 6,
   },
   iconText: {
-    fontSize: 20,
+    fontSize: 22,
     color: Colors.toolbarText,
   },
   iconDisabled: {
@@ -125,8 +119,8 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     backgroundColor: Colors.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingHorizontal: 18,
+    paddingVertical: 7,
     borderRadius: 16,
     marginLeft: 4,
   },
