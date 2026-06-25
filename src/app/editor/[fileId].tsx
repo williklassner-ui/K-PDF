@@ -57,6 +57,7 @@ export default function EditorScreen() {
   const [showPageManager, setShowPageManager] = useState(false);
   const [showSaveOptions, setShowSaveOptions] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [drawMode, setDrawMode] = useState<'rect' | 'free'>('rect');
 
   const viewerRef = useRef<PDFViewerRef>(null);
 
@@ -143,11 +144,11 @@ export default function EditorScreen() {
   }
 
   const TOOLS: Array<{ key: Tool; label: string; icon: string }> = [
-    { key: 'form', label: t.fillForm, icon: '📝' },
-    { key: 'sign', label: t.sign, icon: '✍️' },
-    { key: 'highlight', label: t.highlight, icon: '🖍️' },
-    { key: 'redact', label: t.redact, icon: '⬛' },
-    { key: 'none', label: t.pages, icon: '📄' },
+    { key: 'form', label: t.fillForm, icon: '✎' },
+    { key: 'sign', label: t.sign, icon: '✒' },
+    { key: 'highlight', label: t.highlight, icon: '☆' },
+    { key: 'redact', label: t.redact, icon: '▮' },
+    { key: 'none', label: t.pages, icon: '⊞' },
   ];
 
   return (
@@ -184,6 +185,7 @@ export default function EditorScreen() {
             pageIndex={currentPage - 1}
             containerWidth={canvasSize.width}
             containerHeight={canvasSize.height}
+            drawMode={drawMode}
           />
         )}
 
@@ -198,20 +200,40 @@ export default function EditorScreen() {
 
       {activeTool === 'highlight' && showColorPicker && (
         <View style={styles.colorPicker}>
-          {HighlightColors.map((c) => (
+          <View style={styles.drawModeRow}>
             <TouchableOpacity
-              key={c.name}
-              style={[
-                styles.colorSwatch,
-                { backgroundColor: c.solid },
-                highlightColor === c.color && styles.colorSwatchActive,
-              ]}
-              onPress={() => {
-                setHighlightColor(c.color);
-                setShowColorPicker(false);
-              }}
-            />
-          ))}
+              style={[styles.drawModeBtn, drawMode === 'rect' && styles.drawModeBtnActive]}
+              onPress={() => setDrawMode('rect')}
+            >
+              <Text style={[styles.drawModeText, drawMode === 'rect' && styles.drawModeTextActive]}>
+                ▭ Rechteck
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.drawModeBtn, drawMode === 'free' && styles.drawModeBtnActive]}
+              onPress={() => setDrawMode('free')}
+            >
+              <Text style={[styles.drawModeText, drawMode === 'free' && styles.drawModeTextActive]}>
+                ✎ Freihand
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.colorSwatchRow}>
+            {HighlightColors.map((c) => (
+              <TouchableOpacity
+                key={c.name}
+                style={[
+                  styles.colorSwatch,
+                  { backgroundColor: c.solid },
+                  highlightColor === c.color && styles.colorSwatchActive,
+                ]}
+                onPress={() => {
+                  setHighlightColor(c.color);
+                  setShowColorPicker(false);
+                }}
+              />
+            ))}
+          </View>
         </View>
       )}
 
@@ -307,10 +329,10 @@ const styles = StyleSheet.create({
   },
   toolBtn: {
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-    minWidth: 68,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 14,
+    minWidth: 80,
   },
   toolBtnActive: {
     backgroundColor: 'rgba(255,160,0,0.25)',
@@ -318,8 +340,9 @@ const styles = StyleSheet.create({
     borderColor: Colors.accent,
   },
   toolIcon: {
-    fontSize: 22,
-    marginBottom: 2,
+    fontSize: 26,
+    marginBottom: 3,
+    color: Colors.toolInactive,
   },
   toolLabel: {
     fontSize: 11,
@@ -331,11 +354,40 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   colorPicker: {
+    backgroundColor: Colors.toolbarBg,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  drawModeRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  drawModeBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  drawModeBtnActive: {
+    backgroundColor: 'rgba(255,160,0,0.2)',
+    borderColor: Colors.accent,
+  },
+  drawModeText: {
+    fontSize: 13,
+    color: Colors.toolInactive,
+    fontWeight: '500',
+  },
+  drawModeTextActive: {
+    color: Colors.toolActive,
+    fontWeight: '700',
+  },
+  colorSwatchRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.toolbarBg,
-    paddingVertical: 8,
     gap: 12,
   },
   colorSwatch: {

@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, GestureResponderEvent } from 'react-native';
+import Svg, { Polyline } from 'react-native-svg';
 import { useEditorStore } from '@/store/editorStore';
 import { normalizedToScreen } from '@/utils/pdfCoordinates';
 import { parseRgbaComponents } from '@/utils/colorUtils';
@@ -18,6 +19,7 @@ interface AnnotationCanvasProps {
   containerWidth: number;
   containerHeight: number;
   onAnnotationAdded?: () => void;
+  drawMode?: 'rect' | 'free';
 }
 
 function AnnotationRect({
@@ -35,7 +37,7 @@ function AnnotationRect({
   const color =
     annotation.type === 'redact'
       ? 'black'
-      : `rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${annotation.opacity ?? a})`;
+      : `rgba(${r},${g},${b},${annotation.opacity ?? a})`;
 
   return (
     <View
@@ -52,45 +54,121 @@ function AnnotationRect({
   );
 }
 
+function FreehandAnnotation({
+  annotation,
+  containerWidth,
+  containerHeight,
+}: {
+  annotation: Annotation;
+  containerWidth: number;
+  containerHeight: number;
+}) {
+  if (!annotation.points || annotation.points.length < 2) return null;
+
+  const { r, g, b, a } = parseRgbaComponents(annotation.color ?? 'rgba(255,235,59,0.5)');
+  const strokeColor = `rgb(${r},${g},${b})`;
+  const strokeOpacity = annotation.opacity ?? a;
+
+  const pointsStr = annotation.points
+    .map((p) => `${p.x * containerWidth},${p.y * containerHeight}`)
+    .join(' ');
+
+  return (
+    <Svg style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <Polyline
+        points={pointsStr}
+        fill="none"
+        stroke={strokeColor}
+        strokeWidth={18}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeOpacity={strokeOpacity}
+      />
+    </Svg>
+  );
+}
+
 export function AnnotationCanvas({
   pageIndex,
   containerWidth,
   containerHeight,
   onAnnotationAdded,
+  drawMode = 'rect',
 }: AnnotationCanvasProps) {
   const { activeTool, annotations, highlightColor, addAnnotation } =
     useEditorStore();
 
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [freehandPoints, setFreehandPoints] = useState<Array<{ x: number; y: number }>>([]);
+  const [freehandActive, setFreehandActive] = useState(false);
 
   const pageAnnotations = annotations.filter((a) => a.pageIndex === pageIndex);
+  const isFreehand = activeTool === 'highlight' && drawMode === 'free';
+  const isInteractive = activeTool === 'highlight' || activeTool === 'redact';
 
   const handleTouchStart = useCallback(
     (e: GestureResponderEvent) => {
-      if (activeTool === 'none' || activeTool === 'sign' || activeTool === 'form') return;
+      if (!isInteractive) return;
       const { locationX, locationY } = e.nativeEvent;
-      setDrag({
-        startX: locationX,
-        startY: locationY,
-        currentX: locationX,
-        currentY: locationY,
-        active: true,
-      });
+
+      if (isFreehand) {
+        setFreehandPoints([{ x: locationX / containerWidth, y: locationY / containerHeight }]);
+        setFreehandActive(true);
+      } else {
+        setDrag({
+          startX: locationX,
+          startY: locationY,
+          currentX: locationX,
+          currentY: locationY,
+          active: true,
+        });
+      }
     },
-    [activeTool]
+    [isInteractive, isFreehand, containerWidth, containerHeight]
   );
 
   const handleTouchMove = useCallback(
     (e: GestureResponderEvent) => {
-      if (!drag?.active) return;
-      setDrag((d) =>
-        d ? { ...d, currentX: e.nativeEvent.locationX, currentY: e.nativeEvent.locationY } : null
-      );
+      const { locationX, locationY } = e.nativeEvent;
+      if (isFreehand && freehandActive) {
+        setFreehandPoints((pts) => [
+          ...pts,
+          { x: locationX / containerWidth, y: locationY / containerHeight },
+        ]);
+      } else if (drag?.active) {
+        setDrag((d) =>
+          d ? { ...d, currentX: locationX, currentY: locationY } : null
+        );
+      }
     },
-    [drag?.active]
+    [drag?.active, freehandActive, isFreehand, containerWidth, containerHeight]
   );
 
   const handleTouchEnd = useCallback(() => {
+    if (isFreehand && freehandActive) {
+      if (freehandPoints.length >= 3) {
+        const xs = freehandPoints.map((p) => p.x);
+        const ys = freehandPoints.map((p) => p.y);
+        const annotation: Annotation = {
+          id: `highlight-free-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          type: 'highlight',
+          pageIndex,
+          x: Math.min(...xs),
+          y: Math.min(...ys),
+          width: Math.max(...xs) - Math.min(...xs),
+          height: Math.max(...ys) - Math.min(...ys),
+          color: highlightColor,
+          opacity: 0.6,
+          points: freehandPoints,
+        };
+        addAnnotation(annotation);
+        onAnnotationAdded?.();
+      }
+      setFreehandPoints([]);
+      setFreehandActive(false);
+      return;
+    }
+
     if (!drag?.active) return;
 
     const rawX = Math.min(drag.startX, drag.currentX);
@@ -123,9 +201,7 @@ export function AnnotationCanvas({
     addAnnotation(annotation);
     onAnnotationAdded?.();
     setDrag(null);
-  }, [drag, activeTool, pageIndex, containerWidth, containerHeight, highlightColor, addAnnotation, onAnnotationAdded]);
-
-  const isInteractive = activeTool === 'highlight' || activeTool === 'redact';
+  }, [drag, freehandActive, freehandPoints, isFreehand, activeTool, pageIndex, containerWidth, containerHeight, highlightColor, addAnnotation, onAnnotationAdded]);
 
   const dragPreviewColor =
     activeTool === 'redact' ? 'rgba(0,0,0,0.7)' : highlightColor;
@@ -139,16 +215,25 @@ export function AnnotationCanvas({
       onResponderMove={handleTouchMove}
       onResponderRelease={handleTouchEnd}
     >
-      {pageAnnotations.map((annotation) => (
-        <AnnotationRect
-          key={annotation.id}
-          annotation={annotation}
-          containerWidth={containerWidth}
-          containerHeight={containerHeight}
-        />
-      ))}
+      {pageAnnotations.map((annotation) =>
+        annotation.points && annotation.points.length >= 2 ? (
+          <FreehandAnnotation
+            key={annotation.id}
+            annotation={annotation}
+            containerWidth={containerWidth}
+            containerHeight={containerHeight}
+          />
+        ) : (
+          <AnnotationRect
+            key={annotation.id}
+            annotation={annotation}
+            containerWidth={containerWidth}
+            containerHeight={containerHeight}
+          />
+        )
+      )}
 
-      {drag?.active && isInteractive && (() => {
+      {drag?.active && !isFreehand && (() => {
         const x = Math.min(drag.startX, drag.currentX);
         const y = Math.min(drag.startY, drag.currentY);
         const w = Math.abs(drag.currentX - drag.startX);
@@ -162,10 +247,31 @@ export function AnnotationCanvas({
               top: y,
               width: w,
               height: h,
-              backgroundColor: `rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${a})`,
+              backgroundColor: `rgba(${r},${g},${b},${a})`,
             }}
             pointerEvents="none"
           />
+        );
+      })()}
+
+      {freehandActive && freehandPoints.length >= 2 && (() => {
+        const { r, g, b, a } = parseRgbaComponents(highlightColor);
+        const strokeColor = `rgb(${r},${g},${b})`;
+        const pointsStr = freehandPoints
+          .map((p) => `${p.x * containerWidth},${p.y * containerHeight}`)
+          .join(' ');
+        return (
+          <Svg style={StyleSheet.absoluteFillObject} pointerEvents="none">
+            <Polyline
+              points={pointsStr}
+              fill="none"
+              stroke={strokeColor}
+              strokeWidth={18}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeOpacity={0.6}
+            />
+          </Svg>
         );
       })()}
     </View>

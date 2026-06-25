@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -19,14 +19,22 @@ interface SignaturePadProps {
 
 const { width, height } = Dimensions.get('window');
 
+const PEN_COLORS = [
+  { color: '#111111', label: 'Schwarz' },
+  { color: '#1565C0', label: 'Blau' },
+  { color: '#C62828', label: 'Rot' },
+  { color: '#ffa000', label: 'Orange' },
+];
+
 const WEBSTYLE = `
   .m-signature-pad { border: none; box-shadow: none; }
   .m-signature-pad--footer { display: none; }
-  canvas { background: transparent; }
+  canvas { background: #ffffff; }
 `;
 
 export function SignaturePad({ visible, onInsert, onClose }: SignaturePadProps) {
   const sigRef = useRef<any>(null);
+  const [penColor, setPenColor] = useState('#111111');
 
   function handleOK(data: string) {
     onInsert(data);
@@ -39,6 +47,11 @@ export function SignaturePad({ visible, onInsert, onClose }: SignaturePadProps) 
 
   function handleConfirm() {
     sigRef.current?.readSignature();
+  }
+
+  function handleColorChange(color: string) {
+    setPenColor(color);
+    sigRef.current?.changePenColor(color);
   }
 
   return (
@@ -63,6 +76,20 @@ export function SignaturePad({ visible, onInsert, onClose }: SignaturePadProps) 
 
         <Text style={styles.hint}>{t.signatureHint}</Text>
 
+        <View style={styles.colorRow}>
+          {PEN_COLORS.map((c) => (
+            <TouchableOpacity
+              key={c.color}
+              style={[
+                styles.colorSwatch,
+                { backgroundColor: c.color },
+                penColor === c.color && styles.colorSwatchActive,
+              ]}
+              onPress={() => handleColorChange(c.color)}
+            />
+          ))}
+        </View>
+
         <View style={styles.canvasContainer}>
           <SignatureCanvas
             ref={sigRef}
@@ -74,8 +101,8 @@ export function SignaturePad({ visible, onInsert, onClose }: SignaturePadProps) 
             webStyle={WEBSTYLE}
             autoClear={false}
             imageType="image/png"
-            backgroundColor="rgba(0,0,0,0)"
-            penColor={Colors.textPrimaryLight}
+            backgroundColor="#ffffff"
+            penColor={penColor}
           />
         </View>
 
@@ -116,7 +143,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondaryLight,
   },
   confirmText: {
-    color: Colors.primary,
+    color: Colors.accent,
     fontWeight: '600',
   },
   hint: {
@@ -124,7 +151,25 @@ const styles = StyleSheet.create({
     color: Colors.textSecondaryLight,
     fontSize: 13,
     marginTop: 12,
-    marginBottom: 8,
+    marginBottom: 4,
+  },
+  colorRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 10,
+  },
+  colorSwatch: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  colorSwatchActive: {
+    borderColor: Colors.accent,
+    transform: [{ scale: 1.2 }],
   },
   canvasContainer: {
     flex: 1,
@@ -133,7 +178,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     margin: 16,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: '#ffffff',
   },
   clearBtn: {
     alignSelf: 'center',
