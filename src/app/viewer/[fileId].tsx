@@ -1,5 +1,6 @@
 import React, { useRef, useCallback, useEffect, useState } from 'react';
 import { View, StyleSheet, Alert, BackHandler } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as NavigationBar from 'expo-navigation-bar';
@@ -44,6 +45,7 @@ export default function ViewerScreen() {
     reset,
   } = useReaderStore();
 
+  const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
   const [localDark, setLocalDark] = useState(isDark);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -246,7 +248,7 @@ export default function ViewerScreen() {
       />
 
       {showNavigator && (
-        <View style={styles.navigator} pointerEvents="box-none">
+        <View style={[styles.navigator, { paddingBottom: insets.bottom + 8 }]} pointerEvents="box-none">
           <PageNavigator
             visible
             currentPage={currentPage}
@@ -275,6 +277,5 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingBottom: 8,
   },
 });

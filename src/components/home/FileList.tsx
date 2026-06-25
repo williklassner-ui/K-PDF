@@ -66,7 +66,7 @@ export function FileList({
 const styles = StyleSheet.create({
   list: {
     paddingVertical: 8,
-    paddingBottom: 80,
+    paddingBottom: 16,
   },
   empty: {
     flex: 1,
